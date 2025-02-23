@@ -40,20 +40,26 @@ def index():
 
 @app.route('/upload', methods=['POST'])
 def upload():
-    if 'image' not in request.files:
-        return "No file uploaded", 400
-
-    file = request.files['image']
-    if file.filename == '':
-        return "No file selected", 400
-
-    # Save the file to a temporary location
-    with tempfile.NamedTemporaryFile(delete=False, suffix='.jpg') as temp_file:
-        file.save(temp_file.name)
-        temp_path = temp_file.name
-
     try:
+        if 'image' not in request.files:
+            logging.error("No file uploaded")
+            return "No file uploaded", 400
+
+        file = request.files['image']
+        if file.filename == '':
+            logging.error("No file selected")
+            return "No file selected", 400
+
+        # Save the file to a temporary location
+        with tempfile.NamedTemporaryFile(delete=False, suffix='.jpg') as temp_file:
+            file.save(temp_file.name)
+            temp_path = temp_file.name
+
+        logging.debug(f"Temporary file saved at: {temp_path}")
+
         response = generative_ai(temp_path)
+        logging.debug(f"Gemini API Response: {response}")
+
         try:
             response = json.loads(response)
             title = response.get('title', 'No title present')
@@ -75,12 +81,21 @@ def upload():
         with open(json_path, 'w') as json_file:
             json.dump(json_data, json_file)
 
+        logging.debug(f"JSON file saved at: {json_path}")
+
         upload_to_gcs(bucket_name, temp_path, file.filename)
         upload_to_gcs(bucket_name, json_path, json_filename)
 
+        logging.debug("Files uploaded to Google Cloud Storage")
+
+    except Exception as e:
+        logging.error(f"Unexpected error: {e}")
+        return "Service Unavailable", 503
+
     finally:
         # Clean up the temporary files
-        os.remove(temp_path)
+        if os.path.exists(temp_path):
+            os.remove(temp_path)
         if os.path.exists(json_path):
             os.remove(json_path)
 
