@@ -1,7 +1,6 @@
 import os
 import json
 import logging
-import tempfile
 from flask import Flask, request, redirect, render_template
 from google.cloud import storage
 import google.generativeai as genai
@@ -29,7 +28,10 @@ def generative_ai(image_file):
 
     response = chat_session.send_message("INSERT_INPUT_HERE")
     logging.debug(f"Gemini API Response: {response.text}")
-    return response.text
+
+    # Remove triple backticks and 'json' prefix
+    response_text = response.text.replace("```json", "").replace("```", "").strip()
+    return response_text
 
 def upload_to_gcs(bucket_name, source_file, destination_blob_name):
     bucket = storage_client.bucket(bucket_name)
@@ -42,19 +44,21 @@ def index():
 
 @app.route('/upload', methods=['POST'])
 def upload():
-    if 'image' not in request.files:
-        return "No file uploaded", 400
-
-    file = request.files['image']
-    if file.filename == '':
-        return "No file selected", 400
-
-    # Save the file to a temporary location
-    with tempfile.NamedTemporaryFile(delete=False, suffix='.jpg') as temp_file:
-        file.save(temp_file.name)
-        temp_path = temp_file.name
+    json_path = None  # Initialize json_path
+    temp_path = None  # Initialize temp_path
 
     try:
+        if 'image' not in request.files:
+            return "No file uploaded", 400
+
+        file = request.files['image']
+        if file.filename == '':
+            return "No file selected", 400
+
+        # Save the file to a temporary location
+        temp_path = os.path.join('/tmp', file.filename)
+        file.save(temp_path)
+
         response = generative_ai(temp_path)
         try:
             response = json.loads(response)
@@ -80,10 +84,15 @@ def upload():
         upload_to_gcs(bucket_name, temp_path, file.filename)
         upload_to_gcs(bucket_name, json_path, json_filename)
 
+    except Exception as e:
+        logging.error(f"Unexpected error: {e}")
+        return "Internal Server Error", 500
+
     finally:
         # Clean up the temporary files
-        os.remove(temp_path)
-        if os.path.exists(json_path):
+        if temp_path and os.path.exists(temp_path):
+            os.remove(temp_path)
+        if json_path and os.path.exists(json_path):
             os.remove(json_path)
 
     return redirect('/')
