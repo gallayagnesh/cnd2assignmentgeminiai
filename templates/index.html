@@ -3,50 +3,47 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Image Gallery</title>
+    <title>Image Upload</title>
     <style>
         body {
             font-family: Arial, sans-serif;
-            text-align: center;
+            background-color: #f0f2f5;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
         }
         .container {
-            max-width: 800px;
-            margin: auto;
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+            text-align: center;
         }
-        .image-card {
-            border: 1px solid #ccc;
-            padding: 10px;
-            margin: 10px;
-            display: inline-block;
-            text-align: left;
+        .upload-form input[type="file"] {
+            margin-bottom: 20px;
         }
-        img {
-            max-width: 100%;
-            height: auto;
+        .upload-form button {
+            padding: 10px 20px;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
         }
-        a {
-            display: block;
-            margin-top: 5px;
-            color: blue;
+        .upload-form button:hover {
+            background-color: #0056b3;
         }
     </style>
 </head>
 <body>
     <div class="container">
-        <h1>Image Gallery</h1>
-        
-        <form action="/upload" method="post" enctype="multipart/form-data">
-            <input type="file" name="image" required>
+        <h1>Upload Your Image</h1>
+        <form class="upload-form" action="/upload" method="post" enctype="multipart/form-data">
+            <input type="file" name="image" accept="image/jpeg, image/jpg" required>
             <button type="submit">Upload</button>
         </form>
-
-        <h2>Uploaded Images</h2>
-        {% for image, description in images.items() %}
-            <div class="image-card">
-                <img src="{{ url_for('getfiles', user_id=user_id, filename=image) }}" alt="{{ image }}">
-                <a href="{{ url_for('view_file', user_id=user_id, filename=image) }}">View Details</a>
-            </div>
-        {% endfor %}
     </div>
 </body>
 </html>
