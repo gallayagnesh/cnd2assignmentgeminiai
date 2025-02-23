@@ -11,6 +11,8 @@ bucket_name = 'cnd2geminiai-images-buckets'
 storage_client = storage.Client()
 genai.configure(api_key='AIzaSyABY4oVvH7JrxpA70rv0vhlWLJ5WjAVjoI')
 
+logging.basicConfig(level=logging.DEBUG)
+
 def upload_to_gemini(path, mime_type=None):
     file = genai.upload_file(path, mime_type=mime_type)
     return file
@@ -22,8 +24,9 @@ def generative_ai(image_file):
     chat_session = model.start_chat(
         history=[{"role": "user", "parts": [files, "generate title and description for the image and return the response in json format"]}]
     )
-    
+
     response = chat_session.send_message("INSERT_INPUT_HERE")
+    logging.debug(f"Gemini API Response: {response.text}")
     return response.text
 
 def upload_to_gcs(bucket_name, source_file, destination_blob_name):
@@ -38,38 +41,48 @@ def index():
 @app.route('/upload', methods=['POST'])
 def upload():
     if 'image' not in request.files:
-        return redirect('/')
-    
+        return "No file uploaded", 400
+
     file = request.files['image']
     if file.filename == '':
-        return redirect('/')
-    
-    temp_path = os.path.join('/tmp', file.filename)
-    file.save(temp_path)
+        return "No file selected", 400
 
-    response = generative_ai(temp_path)
+    # Save the file to a temporary location
+    with tempfile.NamedTemporaryFile(delete=False, suffix='.jpg') as temp_file:
+        file.save(temp_file.name)
+        temp_path = temp_file.name
+
     try:
-        response = json.loads(response)
-        title = response.get('title', 'No title present')
-        description = response.get('description', 'No description present')
-    except:
-        return "No response received"
+        response = generative_ai(temp_path)
+        try:
+            response = json.loads(response)
+            title = response.get('title', 'No title present')
+            description = response.get('description', 'No description present')
+        except json.JSONDecodeError:
+            logging.error("Invalid JSON response from Gemini API")
+            return "Invalid response from Gemini API", 500
+        except Exception as e:
+            logging.error(f"Error processing Gemini API response: {e}")
+            return "Error processing response", 500
 
-    json_data = {
-        "title": title,
-        "description": description
-    }
+        json_data = {
+            "title": title,
+            "description": description
+        }
 
-    json_filename = os.path.splitext(file.filename)[0] + '.json'
-    json_path = os.path.join('/tmp', json_filename)
-    with open(json_path, 'w') as json_file:
-        json.dump(json_data, json_file)
+        json_filename = os.path.splitext(file.filename)[0] + '.json'
+        json_path = os.path.join('/tmp', json_filename)
+        with open(json_path, 'w') as json_file:
+            json.dump(json_data, json_file)
 
-    upload_to_gcs(bucket_name, temp_path, file.filename)
-    upload_to_gcs(bucket_name, json_path, json_filename)
+        upload_to_gcs(bucket_name, temp_path, file.filename)
+        upload_to_gcs(bucket_name, json_path, json_filename)
 
-    os.remove(temp_path)
-    os.remove(json_path)
+    finally:
+        # Clean up the temporary files
+        os.remove(temp_path)
+        if os.path.exists(json_path):
+            os.remove(json_path)
 
     return redirect('/')
 
