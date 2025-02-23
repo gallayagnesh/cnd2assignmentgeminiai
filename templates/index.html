@@ -3,19 +3,50 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Image Upload</title>
+    <title>Image Gallery</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            text-align: center;
+        }
+        .container {
+            max-width: 800px;
+            margin: auto;
+        }
+        .image-card {
+            border: 1px solid #ccc;
+            padding: 10px;
+            margin: 10px;
+            display: inline-block;
+            text-align: left;
+        }
+        img {
+            max-width: 100%;
+            height: auto;
+        }
+        a {
+            display: block;
+            margin-top: 5px;
+            color: blue;
+        }
+    </style>
 </head>
 <body>
-    <h1>Image Upload and List</h1>
-    <form action="/upload" method="POST" enctype="multipart/form-data">
-        <input type="file" name="file" required>
-        <button type="submit">Upload</button>
-    </form>
-    <h2>Uploaded Images</h2>
-    <ul>
-        {% for image in images %}
-        <li><a href="{{ image.url }}" target="_blank">{{ image.filename }}</a></li>
+    <div class="container">
+        <h1>Image Gallery</h1>
+        
+        <form action="/upload" method="post" enctype="multipart/form-data">
+            <input type="file" name="image" required>
+            <button type="submit">Upload</button>
+        </form>
+
+        <h2>Uploaded Images</h2>
+        {% for image, description in images.items() %}
+            <div class="image-card">
+                <img src="{{ url_for('getfiles', user_id=user_id, filename=image) }}" alt="{{ image }}">
+                <a href="{{ url_for('view_file', user_id=user_id, filename=image) }}">View Details</a>
+            </div>
         {% endfor %}
-    </ul>
+    </div>
 </body>
 </html>
