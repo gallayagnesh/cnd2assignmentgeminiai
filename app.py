@@ -21,7 +21,7 @@ def upload_to_gcs(file, filename):
     """Uploads a file to Google Cloud Storage and returns its public URL."""
     blob = bucket.blob(filename)
     blob.upload_from_file(file, content_type=file.content_type)
-    return f"https://storage.googleapis.com/{CLOUD_STORAGE_BUCKET}/{filename}"
+    return f"https://console.cloud.google.com/storage/browser/{CLOUD_STORAGE_BUCKET}/{filename}"
 
 def generate_caption_description(image_url):
     """Calls the Gemini API to generate a caption/description for an image."""
