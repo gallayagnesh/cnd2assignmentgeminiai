@@ -39,11 +39,18 @@
 </head>
 <body>
     <div class="container">
-        <h1>Upload Your Image</h1>
-        <form class="upload-form" action="/upload" method="post" enctype="multipart/form-data">
-            <input type="file" name="image" accept="image/jpeg, image/jpg" required>
-            <button type="submit">Upload</button>
-        </form>
-    </div>
+    <h1>Upload Your Image</h1>
+    <form class="upload-form" action="/upload" method="post" enctype="multipart/form-data">
+        <input type="file" name="image" accept="image/jpeg, image/jpg" required>
+        <button type="submit">Upload</button>
+    </form>
+
+    <h2>Uploaded Images</h2>
+    <ul>
+        {% for image in images %}
+            <li><a href="{{ url_for('view_image', filename=image) }}">{{ image }}</a></li>
+        {% endfor %}
+    </ul>
+</div>
 </body>
 </html>
