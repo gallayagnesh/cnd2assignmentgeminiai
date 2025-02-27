@@ -9,27 +9,42 @@ import google.generativeai as genai
 # Flask App Initialization
 app = Flask(__name__)
 
+# GCP Configurations
 bucket_name = os.getenv("GCS_BUCKET_NAME") 
 PROJECT_ID = "image-upload-gcp-project"
 SECRET_NAME = "GCS_SERVICE_ACCOUNT_KEY"
+GEMINI_SECRET_NAME = "GEMINI_API_KEY"
 
 # Configure Logging
 logging.basicConfig(level=logging.DEBUG)
 
 def get_gcs_credentials():
-    """Fetches Service Account JSON from Secret Manager and sets environment variable."""
+    """Fetches Service Account JSON and Gemini API key from Secret Manager."""
     client = secretmanager.SecretManagerServiceClient()
+
+    # Fetch GCS Service Account Key
     secret_path = f"projects/{PROJECT_ID}/secrets/{SECRET_NAME}/versions/latest"
-    
     response = client.access_secret_version(request={"name": secret_path})
     secret_json = response.payload.data.decode("UTF-8")
 
-    # Store the credentials in a temporary file
+    # Save to temporary file
     temp_cred_path = "/tmp/gcs_service_account.json"
     with open(temp_cred_path, "w") as f:
         f.write(secret_json)
 
     os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = temp_cred_path
+
+    # Fetch Gemini API Key
+    gemini_secret_path = f"projects/{PROJECT_ID}/secrets/{GEMINI_SECRET_NAME}/versions/latest"
+    try:
+        gemini_response = client.access_secret_version(request={"name": gemini_secret_path})
+        gemini_api_key = gemini_response.payload.data.decode("UTF-8")
+        genai.configure(api_key=gemini_api_key)  # Set API Key for Gemini AI
+        logging.info("Gemini AI API Key successfully configured.")
+    except Exception as e:
+        logging.error(f"Failed to retrieve Gemini API Key: {e}")
+        raise
+
     return temp_cred_path
 
 # Initialize Google Cloud Clients
@@ -41,51 +56,73 @@ storage_client = initialize_clients()
 
 def upload_to_gemini(path, mime_type="image/jpeg"):
     """Uploads image to Gemini AI for processing."""
-    file = genai.upload_file(path, mime_type=mime_type)
-    return file
+    try:
+        file = genai.upload_file(path, mime_type=mime_type)
+        return file
+    except Exception as e:
+        logging.error(f"Failed to upload image to Gemini: {e}")
+        return None
 
 def generative_ai(image_file):
     """Sends image to Gemini AI and retrieves title & description."""
-    model = genai.GenerativeModel(model_name="gemini-1.5-flash")
-    files = upload_to_gemini(image_file)
-
-    chat_session = model.start_chat(
-        history=[{"role": "user", "parts": [files, "Generate title and description for the image and return as JSON"]}]
-    )
-    
-    response = chat_session.send_message("Generate title and description in JSON format")
-    logging.debug(f"Gemini API Response: {response.text}")
-
     try:
+        model = genai.GenerativeModel(model_name="gemini-1.5-flash")
+        files = upload_to_gemini(image_file)
+        
+        if not files:
+            return {"title": "Upload Error", "description": "Failed to upload image to Gemini AI."}
+
+        chat_session = model.start_chat(
+            history=[{"role": "user", "parts": [files, "Generate title and description for the image and return as JSON"]}]
+        )
+
+        response = chat_session.send_message("Generate title and description in JSON format")
+        logging.debug(f"Gemini API Response: {response.text}")
+
         response_text = response.text.replace("```json", "").replace("```", "").strip()
         return json.loads(response_text)
+
     except json.JSONDecodeError:
-        logging.error("Invalid JSON response from Gemini API")
-        return {"title": "No title", "description": "No description"}
+        logging.error("Invalid JSON response from Gemini AI")
+        return {"title": "Invalid Response", "description": "Gemini AI returned an invalid response."}
+    except Exception as e:
+        logging.error(f"Error in generative AI: {e}")
+        return {"title": "Error", "description": "An error occurred while processing the image."}
 
 def upload_to_gcs(bucket_name, source_file, destination_blob_name):
     """Uploads a file to Google Cloud Storage."""
-    bucket = storage_client.bucket(bucket_name)
-    blob = bucket.blob(destination_blob_name)
-    blob.upload_from_filename(source_file)
+    try:
+        bucket = storage_client.bucket(bucket_name)
+        blob = bucket.blob(destination_blob_name)
+        blob.upload_from_filename(source_file)
+    except Exception as e:
+        logging.error(f"Failed to upload {source_file} to GCS: {e}")
 
 def list_uploaded_images(bucket_name):
     """Lists all images in the GCS bucket."""
-    bucket = storage_client.bucket(bucket_name)
-    blobs = bucket.list_blobs()
-    return [blob.name for blob in blobs if blob.name.endswith(('.jpg', '.jpeg'))]
+    try:
+        bucket = storage_client.bucket(bucket_name)
+        blobs = bucket.list_blobs()
+        return [blob.name for blob in blobs if blob.name.endswith(('.jpg', '.jpeg'))]
+    except Exception as e:
+        logging.error(f"Failed to list images in GCS: {e}")
+        return []
 
 def generate_temporary_url(bucket_name, blob_name, expiration=3600):
     """Generates a signed URL to access private GCS images."""
-    bucket = storage_client.bucket(bucket_name)
-    blob = bucket.blob(blob_name)
-    
-    url = blob.generate_signed_url(
-        version="v4",
-        expiration=datetime.timedelta(seconds=expiration),
-        method="GET"
-    )
-    return url
+    try:
+        bucket = storage_client.bucket(bucket_name)
+        blob = bucket.blob(blob_name)
+        
+        url = blob.generate_signed_url(
+            version="v4",
+            expiration=datetime.timedelta(seconds=expiration),
+            method="GET"
+        )
+        return url
+    except Exception as e:
+        logging.error(f"Failed to generate signed URL for {blob_name}: {e}")
+        return None
 
 @app.route('/')
 def index():
@@ -95,7 +132,6 @@ def index():
 @app.route('/upload', methods=['POST'])
 def upload():
     """Handles image upload, AI processing, and JSON metadata storage."""
-    bucket_name = "cnd2geminiai-images-buckets"  # Change as per your bucket
     json_path, temp_path = None, None
 
     try:
