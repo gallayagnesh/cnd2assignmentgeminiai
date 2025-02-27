@@ -10,7 +10,7 @@ import google.generativeai as genai
 app = Flask(__name__)
 
 # GCP Configurations
-bucket_name = os.getenv("GCS_BUCKET_NAME") 
+bucket_name = os.getenv("GCS_BUCKET_NAME")
 PROJECT_ID = "image-upload-gcp-project"
 SECRET_NAME = "GCS_SERVICE_ACCOUNT_KEY"
 GEMINI_SECRET_NAME = "GEMINI_API_KEY"
@@ -95,8 +95,11 @@ def upload_to_gcs(bucket_name, source_file, destination_blob_name):
         bucket = storage_client.bucket(bucket_name)
         blob = bucket.blob(destination_blob_name)
         blob.upload_from_filename(source_file)
+        logging.info(f"Uploaded {destination_blob_name} to GCS successfully.")
+        return True
     except Exception as e:
         logging.error(f"Failed to upload {source_file} to GCS: {e}")
+        return False
 
 def list_uploaded_images(bucket_name):
     """Lists all images in the GCS bucket."""
@@ -113,7 +116,11 @@ def generate_temporary_url(bucket_name, blob_name, expiration=3600):
     try:
         bucket = storage_client.bucket(bucket_name)
         blob = bucket.blob(blob_name)
-        
+
+        if not blob.exists(storage_client):
+            logging.error(f"File {blob_name} not found in GCS.")
+            return None
+
         url = blob.generate_signed_url(
             version="v4",
             expiration=datetime.timedelta(seconds=expiration),
@@ -126,12 +133,18 @@ def generate_temporary_url(bucket_name, blob_name, expiration=3600):
 
 @app.route('/')
 def index():
+    if not bucket_name:
+        return "GCS_BUCKET_NAME is not set", 500
+
     images = list_uploaded_images(bucket_name)
     return render_template('index.html', images=images)
 
 @app.route('/upload', methods=['POST'])
 def upload():
     """Handles image upload, AI processing, and JSON metadata storage."""
+    if not bucket_name:
+        return "GCS_BUCKET_NAME is not set", 500
+
     json_path, temp_path = None, None
 
     try:
@@ -159,13 +172,13 @@ def upload():
             json.dump(json_data, json_file)
 
         # Upload to GCS
-        upload_to_gcs(bucket_name, temp_path, file.filename)
-        upload_to_gcs(bucket_name, json_path, json_filename)
-    
+        if not upload_to_gcs(bucket_name, temp_path, file.filename) or not upload_to_gcs(bucket_name, json_path, json_filename):
+            return "File upload failed", 500
+
     except Exception as e:
         logging.error(f"Unexpected error: {e}")
         return "Internal Server Error", 500
-    
+
     finally:
         # Cleanup temporary files
         if temp_path and os.path.exists(temp_path):
@@ -178,26 +191,18 @@ def upload():
 @app.route('/view')
 def view_image():
     """Fetches and displays metadata along with signed URL for image."""
-    filename = request.args.get('filename')
+    if not bucket_name:
+        return "GCS_BUCKET_NAME is not set", 500
 
+    filename = request.args.get('filename')
     if not filename:
         return "No file specified", 400
 
-    json_filename = os.path.splitext(filename)[0] + '.json'
-    bucket = storage_client.bucket(bucket_name)
-    blob = bucket.blob(json_filename)
-
-    if not blob.exists():
-        return "Metadata not found", 404
-
-    json_data = json.loads(blob.download_as_text())
-    title = json_data.get('title', 'No title available')
-    description = json_data.get('description', 'No description available')
-
-    # Generate a temporary URL for secure access
     temp_url = generate_temporary_url(bucket_name, filename)
+    if not temp_url:
+        return "File not found", 404
 
-    return render_template('view.html', image_url=temp_url, title=title, description=description)
+    return render_template('view.html', image_url=temp_url)
 
 if __name__ == '__main__':
     app.run(port=8080, debug=True)
