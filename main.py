@@ -191,18 +191,36 @@ def upload():
 @app.route('/view')
 def view_image():
     """Fetches and displays metadata along with signed URL for image."""
-    if not bucket_name:
-        return "GCS_BUCKET_NAME is not set", 500
-
     filename = request.args.get('filename')
+
     if not filename:
         return "No file specified", 400
 
-    temp_url = generate_temporary_url(bucket_name, filename)
-    if not temp_url:
-        return "File not found", 404
+    json_filename = os.path.splitext(filename)[0] + '.json'
+    bucket = storage_client.bucket(bucket_name)
+    blob = bucket.blob(json_filename)
 
-    return render_template('view.html', image_url=temp_url)
+    if not blob.exists():
+        logging.error(f"Metadata file {json_filename} not found in bucket.")
+        return "Metadata not found", 404
+
+    try:
+        json_data = json.loads(blob.download_as_text())
+    except json.JSONDecodeError:
+        logging.error(f"Invalid JSON in metadata file: {json_filename}")
+        return "Invalid metadata format", 500
+
+    title = json_data.get('title', 'No title available')
+    description = json_data.get('description', 'No description available')
+
+    # Generate a temporary URL for secure access
+    temp_url = generate_temporary_url(bucket_name, filename)
+    logging.debug(f"Generated Signed URL: {temp_url}")
+
+    if not temp_url:
+        return "Error generating image URL", 500
+
+    return render_template('view.html', image_url=temp_url, title=title, description=description)
 
 if __name__ == '__main__':
     app.run(port=8080, debug=True)
