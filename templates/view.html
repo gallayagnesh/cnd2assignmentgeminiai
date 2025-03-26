@@ -43,11 +43,27 @@
         .back-button:hover {
             background-color: #0056b3;
         }
+        .deployment-banner {
+            display: inline-block;
+            padding: 3px 8px;
+            border-radius: 4px;
+            font-size: 0.8em;
+            margin-left: 10px;
+            color: white;
+            font-weight: bold;
+        }
     </style>
 </head>
 <body>
     <div class="container">
-        <h1>{{ title }}</h1>
+        <h1>{{ title }}
+            <span class="deployment-banner" style="background-color: 
+                {% if deployment_color == 'blue' %}blue
+                {% elif deployment_color == 'green' %}green
+                {% else %}gray{% endif %};">
+                {{ deployment_color|upper }} V{{ app_version }}
+            </span>
+        </h1>
         <img src="{{ image_url }}" alt="Uploaded Image">
         <p><strong>Description:</strong> {{ description }}</p>
         <a href="/" class="back-button">Back to Gallery</a>
