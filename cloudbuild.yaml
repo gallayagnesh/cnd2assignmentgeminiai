@@ -17,8 +17,8 @@ steps:
       '--region', 'us-central1',
       '--platform', 'managed', '--allow-unauthenticated',
       '--update-env-vars=GCS_BUCKET_NAME=$_BUCKET_NAME', 
-      'DEPLOYMENT_COLOR=blue',
-      'APP_VERSION='$_VERSION', 
+      '--DEPLOYMENT_COLOR=blue',
+      '--APP_VERSION='$_VERSION', 
       '--revision-suffix=blue-$_VERSION'
       ]
 
