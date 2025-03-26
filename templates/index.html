@@ -20,6 +20,8 @@
             border-radius: 8px;
             box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
             text-align: center;
+            width: 80%;
+            max-width: 600px;
         }
         .upload-form input[type="file"] {
             margin-bottom: 20px;
@@ -35,22 +37,48 @@
         .upload-form button:hover {
             background-color: #0056b3;
         }
+        .deployment-banner {
+            display: inline-block;
+            padding: 3px 8px;
+            border-radius: 4px;
+            font-size: 0.8em;
+            margin-left: 10px;
+            color: white;
+            font-weight: bold;
+        }
+        .image-list {
+            list-style-type: none;
+            padding: 0;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        .image-list li {
+            margin: 5px 0;
+        }
     </style>
 </head>
 <body>
     <div class="container">
-    <h1>Upload Your Image</h1>
-    <form class="upload-form" action="/upload" method="post" enctype="multipart/form-data">
-        <input type="file" name="image" accept="image/jpeg, image/jpg" required>
-        <button type="submit">Upload</button>
-    </form>
+        <h1>Image Upload 
+            <span class="deployment-banner" style="background-color: 
+                {% if deployment_color == 'blue' %}blue
+                {% elif deployment_color == 'green' %}green
+                {% else %}gray{% endif %};">
+                {{ deployment_color|upper }} V{{ app_version }}
+            </span>
+        </h1>
+        
+        <form class="upload-form" action="/upload" method="post" enctype="multipart/form-data">
+            <input type="file" name="image" accept="image/jpeg, image/jpg" required>
+            <button type="submit">Upload</button>
+        </form>
 
-    <h2>Uploaded Images</h2>
-    <ul>
-        {% for image in images %}
-            <li><a href="{{ url_for('view_image', filename=image) }}">{{ image }}</a></li>
-        {% endfor %}
-    </ul>
-</div>
+        <h2>Uploaded Images</h2>
+        <ul class="image-list">
+            {% for image in images %}
+                <li><a href="{{ url_for('view_image', filename=image) }}">{{ image }}</a></li>
+            {% endfor %}
+        </ul>
+    </div>
 </body>
 </html>
