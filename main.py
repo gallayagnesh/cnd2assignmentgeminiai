@@ -149,7 +149,6 @@ def inject_deployment_info():
     }
     
 @app.route('/')
-@app.route('/')
 def index():
     if not bucket_name:
         return "GCS_BUCKET_NAME is not set", 500
