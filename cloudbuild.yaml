@@ -2,13 +2,11 @@ options:
   logging: CLOUD_LOGGING_ONLY
 
 steps:
-  # Build container
   - name: 'gcr.io/cloud-builders/docker'
-    args: ['build', '-t', 'gcr.io/$_PROJECT_ID/image-uploader:$COMMIT_SHA', '.']
+    args: ['build', '-t', 'us-central1-docker.pkg.dev/$_PROJECT_ID/cloud-run-source-deploy/image-uploader:$COMMIT_SHA', '.']
   
-  # Push to GCR
   - name: 'gcr.io/cloud-builders/docker'
-    args: ['push', 'gcr.io/$_PROJECT_ID/image-uploader:$COMMIT_SHA']
+    args: ['push', 'us-central1-docker.pkg.dev/$_PROJECT_ID/cloud-run-source-deploy/image-uploader:$COMMIT_SHA']
 
   # Initial deployment (without --no-traffic)
   - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
