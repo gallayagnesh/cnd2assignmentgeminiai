@@ -5,9 +5,9 @@ options:
 steps:
   # Build and push container
   - name: 'gcr.io/cloud-builders/docker'
-    args: ['build', '-t', 'gcr.io/$_PROJECT_ID/geminiaicloudrun:$COMMIT_SHA', '.']
+    args: ['build', '-t', 'gcr.io/$_PROJECT_ID/image-uploader:$COMMIT_SHA', '.']
   - name: 'gcr.io/cloud-builders/docker'
-    args: ['push', 'gcr.io/$_PROJECT_ID/geminiaicloudrun:$COMMIT_SHA']
+    args: ['push', 'gcr.io/$_PROJECT_ID/image-uploader:$COMMIT_SHA']
 
   # Deploy Blue (50% traffic)
   - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
@@ -16,7 +16,7 @@ steps:
       - 'run'
       - 'deploy'
       - 'image-uploader'
-      - '--image=gcr.io/$_PROJECT_ID/geminiaicloudrun:$COMMIT_SHA'
+      - '--image=gcr.io/$_PROJECT_ID/image-uploader:$COMMIT_SHA'
       - '--region=us-central1'
       - '--platform=managed'
       - '--allow-unauthenticated'
@@ -31,7 +31,7 @@ steps:
       - 'run'
       - 'deploy'
       - 'image-uploader'
-      - '--image=gcr.io/$_PROJECT_ID/geminiaicloudrun:$COMMIT_SHA'
+      - '--image=gcr.io/$_PROJECT_ID/image-uploader:$COMMIT_SHA'
       - '--region=us-central1'
       - '--platform=managed'
       - '--update-env-vars=GCS_BUCKET_NAME=$_BUCKET_NAME,DEPLOYMENT_COLOR=green,APP_VERSION=$_VERSION'
@@ -47,5 +47,5 @@ steps:
       - 'update-traffic'
       - 'image-uploader'
       - '--region=us-central1'
-      - '--to-revisions=geminiaicloudrun-blue-$_VERSION=50,image-uploader-green-$_VERSION=50'
+      - '--to-revisions=image-uploader-blue-$_VERSION=50,image-uploader-green-$_VERSION=50'
 
