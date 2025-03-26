@@ -1,51 +1,50 @@
+
+Copy
 options:
   logging: CLOUD_LOGGING_ONLY
 
 steps:
-  # Build container
+  # Build container with correct repository format
   - name: 'gcr.io/cloud-builders/docker'
-    args: ['build', '-t', 'gcr.io/$_PROJECT_ID/image-uploader:$COMMIT_SHA', '.']
+    args: ['build', '-t', 'us-central1-docker.pkg.dev/$_PROJECT_ID/cloud-run-source-deploy/image-uploader:$COMMIT_SHA', '.']
   
-  # Push to GCR
+  # Push to correct repository
   - name: 'gcr.io/cloud-builders/docker'
-    args: ['push', 'gcr.io/$_PROJECT_ID/image-uploader:$COMMIT_SHA']
+    args: ['push', 'us-central1-docker.pkg.dev/$_PROJECT_ID/cloud-run-source-deploy/image-uploader:$COMMIT_SHA']
 
-  # Initial deployment (without --no-traffic)
+  # Initial deployment
   - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
     entrypoint: gcloud
     args:
       - 'run'
       - 'deploy'
       - 'image-uploader'
-      - '--image=gcr.io/$_PROJECT_ID/image-uploader:$COMMIT_SHA'
+      - '--image=us-central1-docker.pkg.dev/$_PROJECT_ID/cloud-run-source-deploy/image-uploader:$COMMIT_SHA'
       - '--region=us-central1'
       - '--platform=managed'
       - '--allow-unauthenticated'
       - '--update-env-vars=GCS_BUCKET_NAME=$_BUCKET_NAME,DEPLOYMENT_COLOR=blue,APP_VERSION=$_VERSION'
       - '--revision-suffix=blue-$_VERSION'
 
-  # Subsequent deployments can use --no-traffic
+  # Subsequent deployments
   - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
     entrypoint: bash
     args:
       - '-c'
       - |
-        # First check if service exists
         if gcloud run services describe image-uploader --region=us-central1 --format='value(status.url)' >/dev/null 2>&1; then
-          echo "Updating existing service with green deployment"
           gcloud run deploy image-uploader \
-            --image=gcr.io/$_PROJECT_ID/image-uploader:$COMMIT_SHA \
+            --image=us-central1-docker.pkg.dev/$_PROJECT_ID/cloud-run-source-deploy/image-uploader:$COMMIT_SHA \
             --region=us-central1 \
             --platform=managed \
             --update-env-vars=GCS_BUCKET_NAME=$_BUCKET_NAME,DEPLOYMENT_COLOR=green,APP_VERSION=$_VERSION \
             --revision-suffix=green-$_VERSION \
             --no-traffic
           
-          echo "Splitting traffic 50/50"
           gcloud run services update-traffic image-uploader \
             --region=us-central1 \
             --to-revisions=image-uploader-blue-$_VERSION=50,image-uploader-green-$_VERSION=50
         else
-          echo "Service doesn't exist yet (this should never happen after first deployment)"
+          echo "Initial deployment failed"
           exit 1
         fi
