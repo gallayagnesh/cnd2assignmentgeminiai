@@ -45,7 +45,3 @@ steps:
       - '--region=us-central1'
       - '--to-revisions=image-uploader-blue-$_VERSION=50,image-uploader-green-$_VERSION=50'
 
-substitutions:
-  _BUCKET_NAME: cnd2geminiai-images-buckets
-  _VERSION: v1-0-0  # Update this for each release
-  PROJECT_ID: image-upload-gcp-project
