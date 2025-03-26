@@ -2,7 +2,7 @@ import os
 import json
 import logging
 import datetime
-from flask import Flask, request, redirect, render_template, url_for
+from flask import Flask, request, redirect, render_template, url_for, jsonify
 from google.cloud import storage, secretmanager
 import google.generativeai as genai
 
@@ -130,14 +130,34 @@ def generate_temporary_url(bucket_name, blob_name, expiration=3600):
     except Exception as e:
         logging.error(f"Failed to generate signed URL for {blob_name}: {e}")
         return None
+        
+@app.route('/health')
+def health_check():
+    """Endpoint for health checks and version identification"""
+    return jsonify({
+        "status": "healthy",
+        "version": os.getenv("APP_VERSION", "1.0.0"),
+        "deployment_color": os.getenv("DEPLOYMENT_COLOR", "none")
+    })
 
+@app.context_processor
+def inject_deployment_info():
+    """Inject deployment color into all templates"""
+    return {
+        "deployment_color": os.getenv("DEPLOYMENT_COLOR", "none"),
+        "app_version": os.getenv("APP_VERSION", "1.0.0")
+    }
+    
+@app.route('/')
 @app.route('/')
 def index():
     if not bucket_name:
         return "GCS_BUCKET_NAME is not set", 500
-
+    
     images = list_uploaded_images(bucket_name)
-    return render_template('index.html', images=images)
+    return render_template('index.html', 
+                        images=images,
+                        deployment_color=os.getenv("DEPLOYMENT_COLOR", "none"))
 
 @app.route('/upload', methods=['POST'])
 def upload():
