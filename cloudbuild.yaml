@@ -11,16 +11,16 @@ steps:
   # Initial deployment (without --no-traffic)
   - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
     entrypoint: gcloud
-    args:
-      - 'run'
-      - 'deploy'
-      - 'image-uploader'
-      - '--image=gcr.io/$_PROJECT_ID/image-uploader:$COMMIT_SHA'
-      - '--region=us-central1'
-      - '--platform=managed'
-      - '--allow-unauthenticated'
-      - '--update-env-vars=GCS_BUCKET_NAME=$_BUCKET_NAME,DEPLOYMENT_COLOR=blue,APP_VERSION=$_VERSION'
-      - '--revision-suffix=blue-$_VERSION'
+    args: [
+      'run', 'deploy', 'image-uploader',
+      '--image', 'us-central1-docker.pkg.dev/image-upload-gcp-project/cloud-run-source-deploy/image-uploader:$COMMIT_SHA',
+      '--region', 'us-central1',
+      '--platform', 'managed', '--allow-unauthenticated',
+      '--update-env-vars=GCS_BUCKET_NAME=$_BUCKET_NAME', 
+      'DEPLOYMENT_COLOR=blue',
+      'APP_VERSION='$_VERSION', 
+      '--revision-suffix=blue-$_VERSION'
+      ]
 
   # Subsequent deployments can use --no-traffic
   - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
