@@ -11,49 +11,85 @@
             display: flex;
             justify-content: center;
             align-items: center;
-            height: 100vh;
+            min-height: 100vh;
             margin: 0;
+            padding: 20px;
         }
         .container {
             background: white;
-            padding: 20px;
+            padding: 30px;
             border-radius: 8px;
             box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
             text-align: center;
-            width: 80%;
-            max-width: 600px;
+            width: 90%;
+            max-width: 800px;
+        }
+        .upload-form {
+            margin-bottom: 30px;
         }
         .upload-form input[type="file"] {
             margin-bottom: 20px;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            width: 100%;
+            max-width: 400px;
         }
         .upload-form button {
-            padding: 10px 20px;
+            padding: 12px 24px;
             background-color: #007bff;
             color: white;
             border: none;
             border-radius: 5px;
             cursor: pointer;
+            font-size: 16px;
+            transition: background-color 0.3s;
         }
         .upload-form button:hover {
             background-color: #0056b3;
         }
         .deployment-banner {
             display: inline-block;
-            padding: 3px 8px;
+            padding: 5px 12px;
             border-radius: 4px;
-            font-size: 0.8em;
+            font-size: 0.9em;
             margin-left: 10px;
             color: white;
             font-weight: bold;
+            text-transform: uppercase;
         }
         .image-list {
             list-style-type: none;
             padding: 0;
-            max-height: 300px;
+            max-height: 400px;
             overflow-y: auto;
+            border: 1px solid #eee;
+            border-radius: 5px;
+            margin-top: 20px;
         }
         .image-list li {
-            margin: 5px 0;
+            padding: 10px;
+            border-bottom: 1px solid #eee;
+            transition: background-color 0.2s;
+        }
+        .image-list li:last-child {
+            border-bottom: none;
+        }
+        .image-list li:hover {
+            background-color: #f8f9fa;
+        }
+        .image-list a {
+            text-decoration: none;
+            color: #007bff;
+            display: block;
+        }
+        h1 {
+            color: #333;
+            margin-bottom: 25px;
+        }
+        h2 {
+            color: #444;
+            margin-top: 30px;
         }
     </style>
 </head>
@@ -61,24 +97,28 @@
     <div class="container">
         <h1>Image Upload 
             <span class="deployment-banner" style="background-color: 
-                {% if deployment_color == 'blue' %}blue
-                {% elif deployment_color == 'green' %}green
-                {% else %}gray{% endif %};">
+                {% if deployment_color == 'blue' %}#4285F4
+                {% elif deployment_color == 'green' %}#34A853
+                {% else %}#9E9E9E{% endif %};">
                 {{ deployment_color|upper }} V{{ app_version }}
             </span>
         </h1>
         
         <form class="upload-form" action="/upload" method="post" enctype="multipart/form-data">
             <input type="file" name="image" accept="image/jpeg, image/jpg" required>
-            <button type="submit">Upload</button>
+            <button type="submit">Upload Image</button>
         </form>
 
         <h2>Uploaded Images</h2>
-        <ul class="image-list">
-            {% for image in images %}
-                <li><a href="{{ url_for('view_image', filename=image) }}">{{ image }}</a></li>
-            {% endfor %}
-        </ul>
+        {% if images %}
+            <ul class="image-list">
+                {% for image in images %}
+                    <li><a href="{{ url_for('view_image', filename=image) }}">{{ image }}</a></li>
+                {% endfor %}
+            </ul>
+        {% else %}
+            <p>No images uploaded yet.</p>
+        {% endif %}
     </div>
 </body>
 </html>
