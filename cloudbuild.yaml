@@ -1,48 +1,70 @@
 options:
   logging: CLOUD_LOGGING_ONLY
+  substitution_option: ALLOW_LOOSE
+  env:
+    - 'GCS_BUCKET_NAME=${_BUCKET_NAME}'
+    - 'APP_VERSION=${_VERSION}'
 
 steps:
-  # Build container with correct repository format
+  # Build the container image
   - name: 'gcr.io/cloud-builders/docker'
-    args: ['build', '-t', 'us-central1-docker.pkg.dev/$_PROJECT_ID/cloud-run-source-deploy/image-uploader:$COMMIT_SHA', '.']
+    args: ['build', '-t', 'us-central1-docker.pkg.dev/image-upload-gcp-project/cloud-run-source-deploy/image-uploader:$COMMIT_SHA', '.']
+    id: 'build'
   
-  # Push to correct repository
+  # Push the container image
   - name: 'gcr.io/cloud-builders/docker'
-    args: ['push', 'us-central1-docker.pkg.dev/$_PROJECT_ID/cloud-run-source-deploy/image-uploader:$COMMIT_SHA']
+    args: ['push', 'us-central1-docker.pkg.dev/image-upload-gcp-project/cloud-run-source-deploy/image-uploader:$COMMIT_SHA']
+    id: 'push'
+    waitFor: ['build']
 
-  # Initial deployment
+  # Deploy blue version (initial deployment)
   - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
-    entrypoint: gcloud
+    entrypoint: 'gcloud'
     args:
       - 'run'
       - 'deploy'
       - 'image-uploader'
-      - '--image=us-central1-docker.pkg.dev/$_PROJECT_ID/cloud-run-source-deploy/image-uploader:$COMMIT_SHA'
+      - '--image=us-central1-docker.pkg.dev/image-upload-gcp-project/cloud-run-source-deploy/image-uploader:$COMMIT_SHA'
       - '--region=us-central1'
       - '--platform=managed'
       - '--allow-unauthenticated'
-      - '--update-env-vars=GCS_BUCKET_NAME=$_BUCKET_NAME,DEPLOYMENT_COLOR=blue,APP_VERSION=$_VERSION'
-      - '--revision-suffix=blue-$_VERSION'
+      - '--set-env-vars=GCS_BUCKET_NAME=$GCS_BUCKET_NAME,DEPLOYMENT_COLOR=blue,APP_VERSION=$APP_VERSION'
+      - '--revision-suffix=blue-$APP_VERSION'
+      - '--memory=512Mi'
+      - '--cpu=1'
+      - '--min-instances=1'
+      - '--max-instances=3'
+      - '--timeout=300s'
+    id: 'deploy-blue'
+    waitFor: ['push']
 
-  # Subsequent deployments
+  # Deploy green version
   - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
-    entrypoint: bash
+    entrypoint: 'gcloud'
     args:
-      - '-c'
-      - |
-        if gcloud run services describe image-uploader --region=us-central1 --format='value(status.url)' >/dev/null 2>&1; then
-          gcloud run deploy image-uploader \
-            --image=us-central1-docker.pkg.dev/$_PROJECT_ID/cloud-run-source-deploy/image-uploader:$COMMIT_SHA \
-            --region=us-central1 \
-            --platform=managed \
-            --update-env-vars=GCS_BUCKET_NAME=$_BUCKET_NAME,DEPLOYMENT_COLOR=green,APP_VERSION=$_VERSION \
-            --revision-suffix=green-$_VERSION \
-            --no-traffic
-          
-          gcloud run services update-traffic image-uploader \
-            --region=us-central1 \
-            --to-revisions=image-uploader-blue-$_VERSION=50,image-uploader-green-$_VERSION=50
-        else
-          echo "Initial deployment failed"
-          exit 1
-        fi
+      - 'run'
+      - 'deploy'
+      - 'image-uploader'
+      - '--image=us-central1-docker.pkg.dev/image-upload-gcp-project/cloud-run-source-deploy/image-uploader:$COMMIT_SHA'
+      - '--region=us-central1'
+      - '--platform=managed'
+      - '--no-traffic'
+      - '--set-env-vars=GCS_BUCKET_NAME=$GCS_BUCKET_NAME,DEPLOYMENT_COLOR=green,APP_VERSION=$APP_VERSION'
+      - '--revision-suffix=green-$APP_VERSION'
+      - '--memory=512Mi'
+      - '--cpu=1'
+    id: 'deploy-green'
+    waitFor: ['deploy-blue']
+
+  # Split traffic 50/50
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    entrypoint: 'gcloud'
+    args:
+      - 'run'
+      - 'services'
+      - 'update-traffic'
+      - 'image-uploader'
+      - '--region=us-central1'
+      - '--to-revisions=image-uploader-blue-$APP_VERSION=50,image-uploader-green-$APP_VERSION=50'
+    id: 'split-traffic'
+    waitFor: ['deploy-green']
