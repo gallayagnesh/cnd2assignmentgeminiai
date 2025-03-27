@@ -11,27 +11,30 @@
             display: flex;
             justify-content: center;
             align-items: center;
-            height: 100vh;
+            min-height: 100vh;
             margin: 0;
-            flex-direction: column;
+            padding: 20px;
         }
         .container {
             background: white;
-            padding: 20px;
+            padding: 30px;
             border-radius: 8px;
             box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
             text-align: center;
-            max-width: 600px;
+            width: 90%;
+            max-width: 800px;
         }
         img {
             max-width: 100%;
             height: auto;
-            margin-bottom: 20px;
+            max-height: 500px;
+            margin: 20px 0;
             border-radius: 8px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
         }
         .back-button {
-            margin-top: 15px;
-            padding: 10px 20px;
+            margin-top: 25px;
+            padding: 12px 24px;
             background-color: #007bff;
             color: white;
             border: none;
@@ -39,18 +42,37 @@
             cursor: pointer;
             text-decoration: none;
             display: inline-block;
+            font-size: 16px;
+            transition: background-color 0.3s;
         }
         .back-button:hover {
             background-color: #0056b3;
         }
         .deployment-banner {
             display: inline-block;
-            padding: 3px 8px;
+            padding: 5px 12px;
             border-radius: 4px;
-            font-size: 0.8em;
+            font-size: 0.9em;
             margin-left: 10px;
             color: white;
             font-weight: bold;
+            text-transform: uppercase;
+        }
+        h1 {
+            color: #333;
+            margin-bottom: 10px;
+        }
+        .description {
+            text-align: left;
+            margin: 20px auto;
+            max-width: 600px;
+            padding: 15px;
+            background-color: #f8f9fa;
+            border-radius: 5px;
+            line-height: 1.6;
+        }
+        .description strong {
+            color: #333;
         }
     </style>
 </head>
@@ -58,14 +80,16 @@
     <div class="container">
         <h1>{{ title }}
             <span class="deployment-banner" style="background-color: 
-                {% if deployment_color == 'blue' %}blue
-                {% elif deployment_color == 'green' %}green
-                {% else %}gray{% endif %};">
+                {% if deployment_color == 'blue' %}#4285F4
+                {% elif deployment_color == 'green' %}#34A853
+                {% else %}#9E9E9E{% endif %};">
                 {{ deployment_color|upper }} V{{ app_version }}
             </span>
         </h1>
         <img src="{{ image_url }}" alt="Uploaded Image">
-        <p><strong>Description:</strong> {{ description }}</p>
+        <div class="description">
+            <strong>Description:</strong> {{ description }}
+        </div>
         <a href="/" class="back-button">Back to Gallery</a>
     </div>
 </body>
