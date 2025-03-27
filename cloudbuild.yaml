@@ -1,9 +1,5 @@
 options:
   logging: CLOUD_LOGGING_ONLY
-  substitution_option: ALLOW_LOOSE
-  env:
-    - 'GCS_BUCKET_NAME=${_BUCKET_NAME}'
-    - 'APP_VERSION=${_VERSION}'
 
 steps:
   # Build the container image
@@ -28,8 +24,8 @@ steps:
       - '--region=us-central1'
       - '--platform=managed'
       - '--allow-unauthenticated'
-      - '--set-env-vars=GCS_BUCKET_NAME=$GCS_BUCKET_NAME,DEPLOYMENT_COLOR=blue,APP_VERSION=$APP_VERSION'
-      - '--revision-suffix=blue-$APP_VERSION'
+      - '--set-env-vars=GCS_BUCKET_NAME=$_BUCKET_NAME,DEPLOYMENT_COLOR=blue,APP_VERSION=$_VERSION'
+      - '--revision-suffix=blue-$_VERSION'
       - '--memory=512Mi'
       - '--cpu=1'
       - '--min-instances=1'
@@ -49,8 +45,8 @@ steps:
       - '--region=us-central1'
       - '--platform=managed'
       - '--no-traffic'
-      - '--set-env-vars=GCS_BUCKET_NAME=$GCS_BUCKET_NAME,DEPLOYMENT_COLOR=green,APP_VERSION=$APP_VERSION'
-      - '--revision-suffix=green-$APP_VERSION'
+      - '--set-env-vars=GCS_BUCKET_NAME=$_BUCKET_NAME,DEPLOYMENT_COLOR=green,APP_VERSION=$_VERSION'
+      - '--revision-suffix=green-$_VERSION'
       - '--memory=512Mi'
       - '--cpu=1'
     id: 'deploy-green'
@@ -65,6 +61,6 @@ steps:
       - 'update-traffic'
       - 'image-uploader'
       - '--region=us-central1'
-      - '--to-revisions=image-uploader-blue-$APP_VERSION=50,image-uploader-green-$APP_VERSION=50'
+      - '--to-revisions=image-uploader-blue-$_VERSION=50,image-uploader-green-$_VERSION=50'
     id: 'split-traffic'
     waitFor: ['deploy-green']
