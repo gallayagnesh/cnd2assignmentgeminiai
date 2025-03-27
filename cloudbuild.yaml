@@ -2,25 +2,25 @@ options:
   logging: CLOUD_LOGGING_ONLY
 
 steps:
-  # Build the container image
+  # Build container
   - name: 'gcr.io/cloud-builders/docker'
-    args: ['build', '-t', 'us-central1-docker.pkg.dev/image-upload-gcp-project/cloud-run-source-deploy/image-uploader:$COMMIT_SHA', '.']
+    args: ['build', '-t', 'us-central1-docker.pkg.dev/$PROJECT_ID/cloud-run-source-deploy/image-uploader:$_VERSION', '.']
     id: 'build'
   
-  # Push the container image
+  # Push container
   - name: 'gcr.io/cloud-builders/docker'
-    args: ['push', 'us-central1-docker.pkg.dev/image-upload-gcp-project/cloud-run-source-deploy/image-uploader:$COMMIT_SHA']
+    args: ['push', 'us-central1-docker.pkg.dev/$PROJECT_ID/cloud-run-source-deploy/image-uploader:$_VERSION']
     id: 'push'
     waitFor: ['build']
 
-  # Deploy blue version (initial deployment)
+  # Deploy blue
   - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
     entrypoint: 'gcloud'
     args:
       - 'run'
       - 'deploy'
       - 'image-uploader'
-      - '--image=us-central1-docker.pkg.dev/image-upload-gcp-project/cloud-run-source-deploy/image-uploader:$COMMIT_SHA'
+      - '--image=us-central1-docker.pkg.dev/$PROJECT_ID/cloud-run-source-deploy/image-uploader:$_VERSION'
       - '--region=us-central1'
       - '--platform=managed'
       - '--allow-unauthenticated'
@@ -28,20 +28,17 @@ steps:
       - '--revision-suffix=blue-$_VERSION'
       - '--memory=512Mi'
       - '--cpu=1'
-      - '--min-instances=1'
-      - '--max-instances=3'
-      - '--timeout=300s'
     id: 'deploy-blue'
     waitFor: ['push']
 
-  # Deploy green version
+  # Deploy green
   - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
     entrypoint: 'gcloud'
     args:
       - 'run'
       - 'deploy'
       - 'image-uploader'
-      - '--image=us-central1-docker.pkg.dev/image-upload-gcp-project/cloud-run-source-deploy/image-uploader:$COMMIT_SHA'
+      - '--image=us-central1-docker.pkg.dev/$PROJECT_ID/cloud-run-source-deploy/image-uploader:$_VERSION'
       - '--region=us-central1'
       - '--platform=managed'
       - '--no-traffic'
@@ -52,7 +49,7 @@ steps:
     id: 'deploy-green'
     waitFor: ['deploy-blue']
 
-  # Split traffic 50/50
+  # Split traffic
   - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
     entrypoint: 'gcloud'
     args:
