@@ -2,75 +2,57 @@ import os
 import json
 import logging
 import datetime
-from flask import Flask, request, redirect, render_template, url_for, jsonify
+from flask import Flask, request, redirect, render_template, url_for
 from google.cloud import storage, secretmanager
 import google.generativeai as genai
 
-# Configure logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
-
-# Initialize Flask app
+# Flask App Initialization
 app = Flask(__name__)
 
-# Configuration
-PROJECT_ID = os.getenv("GOOGLE_CLOUD_PROJECT", "image-upload-gcp-project")
-SECRET_NAME = os.getenv("GCS_SECRET_NAME", "GCS_SERVICE_ACCOUNT_KEY")
-GEMINI_SECRET_NAME = os.getenv("GEMINI_SECRET_NAME", "GEMINI_API_KEY")
-BUCKET_NAME = os.getenv("GCS_BUCKET_NAME")
+# GCP Configurations
+bucket_name = os.getenv("GCS_BUCKET_NAME")
+PROJECT_ID = "image-upload-gcp-project"
+SECRET_NAME = "GCS_SERVICE_ACCOUNT_KEY"
+GEMINI_SECRET_NAME = "GEMINI_API_KEY"
 
-# Validate required environment variables
-if not BUCKET_NAME:
-    logger.error("GCS_BUCKET_NAME environment variable is not set")
-    raise RuntimeError("GCS_BUCKET_NAME environment variable is required")
+# Configure Logging
+logging.basicConfig(level=logging.DEBUG)
 
-# Initialize clients with retry logic
-def initialize_clients():
-    """Initialize GCP clients with proper error handling."""
+def get_gcs_credentials():
+    """Fetches Service Account JSON and Gemini API key from Secret Manager."""
+    client = secretmanager.SecretManagerServiceClient()
+
+    # Fetch GCS Service Account Key
+    secret_path = f"projects/{PROJECT_ID}/secrets/{SECRET_NAME}/versions/latest"
+    response = client.access_secret_version(request={"name": secret_path})
+    secret_json = response.payload.data.decode("UTF-8")
+
+    # Save to temporary file
+    temp_cred_path = "/tmp/gcs_service_account.json"
+    with open(temp_cred_path, "w") as f:
+        f.write(secret_json)
+
+    os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = temp_cred_path
+
+    # Fetch Gemini API Key
+    gemini_secret_path = f"projects/{PROJECT_ID}/secrets/{GEMINI_SECRET_NAME}/versions/latest"
     try:
-        # Get GCS credentials
-        client = secretmanager.SecretManagerServiceClient()
-        
-        # Fetch GCS Service Account Key
-        secret_path = f"projects/{PROJECT_ID}/secrets/{SECRET_NAME}/versions/latest"
-        response = client.access_secret_version(request={"name": secret_path})
-        secret_json = response.payload.data.decode("UTF-8")
-        
-        # Save to temporary file
-        temp_cred_path = "/tmp/gcs_service_account.json"
-        with open(temp_cred_path, "w") as f:
-            f.write(secret_json)
-        
-        os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = temp_cred_path
-        
-        # Initialize Storage Client
-        storage_client = storage.Client()
-        
-        # Verify bucket exists
-        bucket = storage_client.bucket(BUCKET_NAME)
-        if not bucket.exists():
-            logger.error(f"Bucket {BUCKET_NAME} does not exist")
-            raise RuntimeError(f"Bucket {BUCKET_NAME} not found")
-        
-        # Configure Gemini AI
-        gemini_secret_path = f"projects/{PROJECT_ID}/secrets/{GEMINI_SECRET_NAME}/versions/latest"
         gemini_response = client.access_secret_version(request={"name": gemini_secret_path})
         gemini_api_key = gemini_response.payload.data.decode("UTF-8")
-        genai.configure(api_key=gemini_api_key)
-        
-        logger.info("All clients initialized successfully")
-        return storage_client
-        
+        genai.configure(api_key=gemini_api_key)  # Set API Key for Gemini AI
+        logging.info("Gemini AI API Key successfully configured.")
     except Exception as e:
-        logger.error(f"Failed to initialize clients: {e}")
+        logging.error(f"Failed to retrieve Gemini API Key: {e}")
         raise
 
-# Initialize clients at startup
-try:
-    storage_client = initialize_clients()
-except Exception as e:
-    logger.error(f"Application startup failed: {e}")
-    raise
+    return temp_cred_path
+
+# Initialize Google Cloud Clients
+def initialize_clients():
+    get_gcs_credentials()
+    return storage.Client()
+
+storage_client = initialize_clients()
 
 def upload_to_gemini(path, mime_type="image/jpeg"):
     """Uploads image to Gemini AI for processing."""
@@ -78,7 +60,7 @@ def upload_to_gemini(path, mime_type="image/jpeg"):
         file = genai.upload_file(path, mime_type=mime_type)
         return file
     except Exception as e:
-        logger.error(f"Failed to upload image to Gemini: {e}")
+        logging.error(f"Failed to upload image to Gemini: {e}")
         return None
 
 def generative_ai(image_file):
@@ -95,16 +77,16 @@ def generative_ai(image_file):
         )
 
         response = chat_session.send_message("Generate title and description in JSON format")
-        logger.debug(f"Gemini API Response: {response.text}")
+        logging.debug(f"Gemini API Response: {response.text}")
 
         response_text = response.text.replace("```json", "").replace("```", "").strip()
         return json.loads(response_text)
 
     except json.JSONDecodeError:
-        logger.error("Invalid JSON response from Gemini AI")
+        logging.error("Invalid JSON response from Gemini AI")
         return {"title": "Invalid Response", "description": "Gemini AI returned an invalid response."}
     except Exception as e:
-        logger.error(f"Error in generative AI: {e}")
+        logging.error(f"Error in generative AI: {e}")
         return {"title": "Error", "description": "An error occurred while processing the image."}
 
 def upload_to_gcs(bucket_name, source_file, destination_blob_name):
@@ -113,10 +95,10 @@ def upload_to_gcs(bucket_name, source_file, destination_blob_name):
         bucket = storage_client.bucket(bucket_name)
         blob = bucket.blob(destination_blob_name)
         blob.upload_from_filename(source_file)
-        logger.info(f"Uploaded {destination_blob_name} to GCS successfully.")
+        logging.info(f"Uploaded {destination_blob_name} to GCS successfully.")
         return True
     except Exception as e:
-        logger.error(f"Failed to upload {source_file} to GCS: {e}")
+        logging.error(f"Failed to upload {source_file} to GCS: {e}")
         return False
 
 def list_uploaded_images(bucket_name):
@@ -126,7 +108,7 @@ def list_uploaded_images(bucket_name):
         blobs = bucket.list_blobs()
         return [blob.name for blob in blobs if blob.name.endswith(('.jpg', '.jpeg'))]
     except Exception as e:
-        logger.error(f"Failed to list images in GCS: {e}")
+        logging.error(f"Failed to list images in GCS: {e}")
         return []
 
 def generate_temporary_url(bucket_name, blob_name, expiration=3600):
@@ -136,7 +118,7 @@ def generate_temporary_url(bucket_name, blob_name, expiration=3600):
         blob = bucket.blob(blob_name)
 
         if not blob.exists(storage_client):
-            logger.error(f"File {blob_name} not found in GCS.")
+            logging.error(f"File {blob_name} not found in GCS.")
             return None
 
         url = blob.generate_signed_url(
@@ -146,46 +128,24 @@ def generate_temporary_url(bucket_name, blob_name, expiration=3600):
         )
         return url
     except Exception as e:
-        logger.error(f"Failed to generate signed URL for {blob_name}: {e}")
+        logging.error(f"Failed to generate signed URL for {blob_name}: {e}")
         return None
-
-@app.route('/health')
-def health_check():
-    """Endpoint for health checks and version identification"""
-    return jsonify({
-        "status": "healthy",
-        "version": os.getenv("APP_VERSION", "1.0.0"),
-        "deployment_color": os.getenv("DEPLOYMENT_COLOR", "none")
-    })
-
-@app.context_processor
-def inject_deployment_info():
-    """Inject deployment color into all templates"""
-    return {
-        "deployment_color": os.getenv("DEPLOYMENT_COLOR", "none"),
-        "app_version": os.getenv("APP_VERSION", "1.0.0")
-    }
-
-@app.before_request
-def check_services():
-    """Verify required services are available before processing requests."""
-    try:
-        # Simple check to verify storage client is working
-        storage_client.bucket(BUCKET_NAME).exists()
-    except Exception as e:
-        logger.error(f"Service check failed: {e}")
-        return jsonify({"error": "Service unavailable"}), 503
 
 @app.route('/')
 def index():
-    images = list_uploaded_images(BUCKET_NAME)
-    return render_template('index.html', 
-                        images=images,
-                        deployment_color=os.getenv("DEPLOYMENT_COLOR", "none"))
+    if not bucket_name:
+        return "GCS_BUCKET_NAME is not set", 500
+
+    images = list_uploaded_images(bucket_name)
+    bg_color = os.getenv("BACKGROUND_COLOR", "#f0f2f5")  # Default to original color if not set
+    return render_template('index.html', images=images, bg_color=bg_color)
 
 @app.route('/upload', methods=['POST'])
 def upload():
     """Handles image upload, AI processing, and JSON metadata storage."""
+    if not bucket_name:
+        return "GCS_BUCKET_NAME is not set", 500
+
     json_path, temp_path = None, None
 
     try:
@@ -213,11 +173,11 @@ def upload():
             json.dump(json_data, json_file)
 
         # Upload to GCS
-        if not upload_to_gcs(BUCKET_NAME, temp_path, file.filename) or not upload_to_gcs(BUCKET_NAME, json_path, json_filename):
+        if not upload_to_gcs(bucket_name, temp_path, file.filename) or not upload_to_gcs(bucket_name, json_path, json_filename):
             return "File upload failed", 500
 
     except Exception as e:
-        logger.error(f"Unexpected error: {e}")
+        logging.error(f"Unexpected error: {e}")
         return "Internal Server Error", 500
 
     finally:
@@ -238,30 +198,31 @@ def view_image():
         return "No file specified", 400
 
     json_filename = os.path.splitext(filename)[0] + '.json'
-    bucket = storage_client.bucket(BUCKET_NAME)
+    bucket = storage_client.bucket(bucket_name)
     blob = bucket.blob(json_filename)
 
     if not blob.exists():
-        logger.error(f"Metadata file {json_filename} not found in bucket.")
+        logging.error(f"Metadata file {json_filename} not found in bucket.")
         return "Metadata not found", 404
 
     try:
         json_data = json.loads(blob.download_as_text())
     except json.JSONDecodeError:
-        logger.error(f"Invalid JSON in metadata file: {json_filename}")
+        logging.error(f"Invalid JSON in metadata file: {json_filename}")
         return "Invalid metadata format", 500
 
     title = json_data.get('title', 'No title available')
     description = json_data.get('description', 'No description available')
 
     # Generate a temporary URL for secure access
-    temp_url = generate_temporary_url(BUCKET_NAME, filename)
-    logger.debug(f"Generated Signed URL: {temp_url}")
+    temp_url = generate_temporary_url(bucket_name, filename)
+    logging.debug(f"Generated Signed URL: {temp_url}")
 
     if not temp_url:
         return "Error generating image URL", 500
 
-    return render_template('view.html', image_url=temp_url, title=title, description=description)
-
+    bg_color = os.getenv("BACKGROUND_COLOR", "#f0f2f5")  # Default to original color if not set
+    return render_template('view.html', image_url=temp_url, title=title, description=description, bg_color=bg_color)
+    
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 8080)))
+    app.run(port=8080, debug=True)
